@@ -34,11 +34,16 @@ app.get('/api', (req, res) => {
 
 // api/login
 app.post('/api/login',  (req, res) => {
-	if (req.body.email===database['users'][0].email &&
-		req.body.password===database['users'][0].password) {
-		res.json('Welcome!');
-	} else {
-		res.status(400).json('try again');
+	const {email, password} = req.body
+	let found =  false;
+	database['users'].forEach(user => {
+		if (user.email===req.body.email && user.password===req.body.password){
+			found = true;
+			return res.json('Welcome!')
+		}
+	})
+	if(!found) {
+		return res.status(400).json('try again');
 	}
 })
 
@@ -53,7 +58,7 @@ app.post('/api/signup',  (req, res) => {
 		scores: []
 	}
 	database['users'].push(user)
-	res.json('Welcome!');
+	res.json(user);
 })
 
 // api/home/:id
@@ -71,7 +76,7 @@ app.get('/api/home/:id', (req, res) => {
 	}
 })
 
-// api/home/scores
+// api/scores
 app.post('/api/scores', (req, res) => {
 	const {id, scores} = req.body;
 	let found =  false;
@@ -79,7 +84,7 @@ app.post('/api/scores', (req, res) => {
 		if (user.id === id){
 			found = true;
 			user.scores.push(scores)
-			return res.json(user.scores);
+			return res.json('added');
 		}
 	})
 	if (!found) {
