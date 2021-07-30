@@ -2,94 +2,88 @@
 const express =  require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
-
 const app =  express ()
+const knex = require('knex')
+const bcrypt = require('bcryptjs')
+const db = knex({
+  client: 'pg',
+  connection: {
+    host : '127.0.0.1',
+    user : 'postgres',
+    password : 'test',
+    database : 'smartbrain'
+  }
+});
+
 app.use(cors())
 app.use(bodyParser.json());
 
-
-const database = {
-	users: [
-		{
-			id: '123',
-			name: 'Tammy',
-			email: 'c199403@gmail.com',
-			password: '1234a',
-			scores: []
-		},
-		{
-			id: '124',
-			name: 'Lala',
-			email: 'lalaC@gmail.com',
-			password: 'cokacoka',
-			scores: []
-		}
-	]
-};
-
-// api/
-app.get('/api', (req, res) => {
-	res.json(database)
-})
-
 // api/login
 app.post('/api/login',  (req, res) => {
-	const {email, password} = req.body
-	let found =  false;
-	database['users'].forEach(user => {
-		if (user.email===req.body.email && user.password===req.body.password){
-			found = true;
-			return res.json('Welcome!')
+	db.select('email','hash').from('login').where('email', '=', req.body.email)
+	.then(data => {
+		const isValid = bcrypt.compareSync(req.body.password, data[0].hash)
+		if (isValid) {
+			return db.select('*').from('scores').where('email', '=', req.body.email)
+						.then(user => {
+							res.json(user[0]);
+						})
+						.catch(err => res.status(400).json('unable to get scores'))
+		}else{
+			res.status(400).json('try again')
 		}
 	})
-	if(!found) {
-		return res.status(400).json('try again');
-	}
+	.catch (err => res.status(400).json('try again code'))
 })
 
 // api/signup
 app.post('/api/signup',  (req, res) => {
  	const {name, email, password} = req.body
- 	const user = {
-		id: (123 + database['users'].length).toString(),
-		name: name,
-		email: email,
-		password: password,
-		scores: []
-	}
-	database['users'].push(user)
-	res.json(user);
+ 	const hash = bcrypt.hashSync(password, 10)
+
+ 	db.transaction(trx =>{
+		trx.insert({email: email, hash: hash })
+ 	.into('login')
+ 	.returning('email')
+ 	.then(loginEmail =>{
+ 		return trx('scores')
+ 						.returning('*')
+ 						.insert({
+ 							email: loginEmail[0],
+ 							name: name,
+ 							joined: new Date()
+ 						})
+ 						.then(user => {
+							res.json(user[0])
+ 						})
+
+ 	})
+ 	.then(trx.commit)
+ 	.catch(trx.rollback)
+  })
+ 	.catch(err => res.status(404).json('unable to join'))
 })
 
 // api/home/:id
 app.get('/api/home/:id', (req, res) => {
 	const {id} = req.params;
-	let found =  false;
-	database['users'].forEach(user => {
-		if (user.id === id){
-			found = true;
-			return res.json(user);
-		}
-	})
-	if (!found) {
-		return res.status(404).json('wrong id');
-	}
+	
 })
 
 // api/scores
 app.post('/api/scores', (req, res) => {
-	const {id, scores} = req.body;
-	let found =  false;
-	database['users'].forEach(user => {
-		if (user.id === id){
-			found = true;
-			user.scores.push(scores)
-			return res.json('added');
-		}
-	})
-	if (!found) {
-		return res.status(404).json('wrong id');
-	}
+	const {name, email, scores} = req.body;
+		db('scores')
+		.returning('*')
+		.insert({
+			name: name,
+			email: '',
+			scores: scores,
+			joined: new Date()
+		})
+		.then(user => {
+			res.json(user[0])
+		})
 })
 
 
